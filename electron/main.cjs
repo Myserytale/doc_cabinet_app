@@ -1,4 +1,4 @@
-const { app, BrowserWindow, Tray, Menu, ipcMain, dialog, shell } = require('electron');
+const { app, BrowserWindow, Tray, Menu, ipcMain, dialog, shell, nativeImage } = require('electron');
 const path = require('path');
 const SyncManager = require('./syncManager.cjs');
 
@@ -8,6 +8,9 @@ let syncManager = null;
 let isQuitting = false;
 
 function createWindow() {
+  const iconPath = path.join(__dirname, 'icon.png');
+  const appIcon = nativeImage.createFromPath(iconPath);
+
   mainWindow = new BrowserWindow({
     width: 1240,
     height: 820,
@@ -15,7 +18,7 @@ function createWindow() {
     minHeight: 640,
     backgroundColor: '#0a0d14',
     title: 'DocVault - Desktop',
-    icon: path.join(__dirname, 'icon.png'),
+    icon: appIcon.isEmpty() ? undefined : appIcon,
     webPreferences: {
       preload: path.join(__dirname, 'preload.cjs'),
       contextIsolation: true,
@@ -36,7 +39,7 @@ function createWindow() {
   }
 
   mainWindow.on('close', (event) => {
-    if (!isQuitting) {
+    if (!isQuitting && tray) {
       event.preventDefault();
       mainWindow.hide();
     }
@@ -50,71 +53,85 @@ function createWindow() {
 function updateTrayMenu() {
   if (!tray || !syncManager) return;
 
-  const status = syncManager.getStatus();
-  const contextMenu = Menu.buildFromTemplate([
-    {
-      label: 'Open DocVault Dashboard',
-      click: () => {
-        if (mainWindow) {
-          mainWindow.show();
-          mainWindow.focus();
+  try {
+    const status = syncManager.getStatus();
+    const contextMenu = Menu.buildFromTemplate([
+      {
+        label: 'Open DocVault Dashboard',
+        click: () => {
+          if (mainWindow) {
+            mainWindow.show();
+            mainWindow.focus();
+          }
+        }
+      },
+      { type: 'separator' },
+      {
+        label: status.autoSync ? 'Auto-Sync: Active' : 'Auto-Sync: Paused',
+        enabled: false
+      },
+      {
+        label: status.isProcessing ? `Syncing (${status.queueLength} in queue)...` : 'Sync Status: Idle',
+        enabled: false
+      },
+      {
+        label: 'Sync Watched Folders Now',
+        click: () => {
+          const result = syncManager.triggerManualSync();
+          if (mainWindow && !mainWindow.isDestroyed()) {
+            mainWindow.webContents.send('sync:event', {
+              type: 'manual_trigger',
+              message: result.message
+            });
+          }
+        }
+      },
+      {
+        label: status.autoSync ? 'Pause Auto-Sync' : 'Resume Auto-Sync',
+        click: () => {
+          const newStatus = !status.autoSync;
+          syncManager.saveConfig({ autoSync: newStatus });
+        }
+      },
+      { type: 'separator' },
+      {
+        label: 'Quit DocVault',
+        click: () => {
+          isQuitting = true;
+          app.quit();
         }
       }
-    },
-    { type: 'separator' },
-    {
-      label: status.autoSync ? 'Auto-Sync: Active' : 'Auto-Sync: Paused',
-      enabled: false
-    },
-    {
-      label: status.isProcessing ? `Syncing (${status.queueLength} in queue)...` : 'Sync Status: Idle',
-      enabled: false
-    },
-    {
-      label: 'Sync Watched Folders Now',
-      click: () => {
-        const result = syncManager.triggerManualSync();
-        if (mainWindow) {
-          mainWindow.webContents.send('sync:event', {
-            type: 'manual_trigger',
-            message: result.message
-          });
-        }
-      }
-    },
-    {
-      label: status.autoSync ? 'Pause Auto-Sync' : 'Resume Auto-Sync',
-      click: () => {
-        const newStatus = !status.autoSync;
-        syncManager.saveConfig({ autoSync: newStatus });
-      }
-    },
-    { type: 'separator' },
-    {
-      label: 'Quit DocVault',
-      click: () => {
-        isQuitting = true;
-        app.quit();
-      }
-    }
-  ]);
+    ]);
 
-  tray.setContextMenu(contextMenu);
-  tray.setToolTip(`DocVault - ${status.watchedFolders.length} folders watched`);
+    tray.setContextMenu(contextMenu);
+    tray.setToolTip(`DocVault - ${status.watchedFolders.length} folders watched`);
+  } catch (err) {
+    console.warn('Tray menu update failed:', err.message);
+  }
 }
 
 function createTray() {
-  const iconPath = path.join(__dirname, 'icon.png');
-  tray = new Tray(iconPath);
+  try {
+    const iconPath = path.join(__dirname, 'icon.png');
+    const iconImg = nativeImage.createFromPath(iconPath);
 
-  updateTrayMenu();
-
-  tray.on('double-click', () => {
-    if (mainWindow) {
-      mainWindow.show();
-      mainWindow.focus();
+    if (iconImg.isEmpty()) {
+      console.warn('Tray icon is empty, skipping tray creation');
+      return;
     }
-  });
+
+    tray = new Tray(iconImg);
+    updateTrayMenu();
+
+    tray.on('double-click', () => {
+      if (mainWindow) {
+        mainWindow.show();
+        mainWindow.focus();
+      }
+    });
+  } catch (err) {
+    console.warn('System tray initialization skipped or failed:', err.message);
+  }
 }
 
 // Single instance lock
@@ -170,7 +187,9 @@ if (!gotTheLock) {
 
   app.on('window-all-closed', () => {
     if (process.platform !== 'darwin') {
-      // Keep running in tray
+      if (!tray) {
+        app.quit();
+      }
     }
   });
 }
