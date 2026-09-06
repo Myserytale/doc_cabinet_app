@@ -2,6 +2,9 @@ const { app, BrowserWindow, Tray, Menu, ipcMain, dialog, shell, nativeImage } = 
 const path = require('path');
 const SyncManager = require('./syncManager.cjs');
 
+// Suppress benign Chromium GPU VA-API and GLib console warnings on Linux
+app.commandLine.appendSwitch('log-level', '3');
+
 let mainWindow = null;
 let tray = null;
 let syncManager = null;

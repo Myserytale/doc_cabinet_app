@@ -16,13 +16,16 @@ import {
 
 export default function DocumentModal({
   document,
+  categories = [],
   onClose,
   onDownload,
   onDelete,
-  onReindex
+  onReindex,
+  onUpdateCategory
 }) {
   const [copied, setCopied] = useState(false);
   const [isReindexing, setIsReindexing] = useState(false);
+  const [isUpdatingCategory, setIsUpdatingCategory] = useState(false);
 
   if (!document) return null;
 
@@ -86,28 +89,43 @@ export default function DocumentModal({
           {/* Status & Category */}
           <div className="grid grid-cols-2 gap-4">
             <div className="p-3 rounded-lg bg-slate-950 border border-slate-800">
-              <div className="text-slate-500 font-medium mb-1">Category</div>
-              <div className="flex items-center space-x-2">
-                {document.categoryName ? (
-                  <span
-                    className="inline-flex items-center px-2 py-0.5 rounded text-xs font-medium"
-                    style={{
-                      backgroundColor: `${document.categoryColor || '#6366f1'}20`,
-                      color: document.categoryColor || '#a5b4fc',
-                      border: `1px solid ${document.categoryColor || '#6366f1'}40`
-                    }}
-                  >
-                    {document.categoryName}
+              <div className="flex items-center justify-between mb-1.5">
+                <span className="text-slate-500 font-medium">Category</span>
+                {isUpdatingCategory && (
+                  <span className="text-[10px] text-indigo-400 font-mono flex items-center">
+                    <RefreshCw className="w-3 h-3 animate-spin mr-1" />
+                    Saving...
                   </span>
-                ) : (
-                  <span className="text-slate-400 italic">Uncategorized</span>
                 )}
               </div>
+              <select
+                value={document.categoryId || ''}
+                disabled={isUpdatingCategory}
+                onChange={async (e) => {
+                  const val = e.target.value || null;
+                  setIsUpdatingCategory(true);
+                  try {
+                    if (onUpdateCategory) {
+                      await onUpdateCategory(document.id, val);
+                    }
+                  } finally {
+                    setIsUpdatingCategory(false);
+                  }
+                }}
+                className="w-full bg-slate-900 border border-slate-800 rounded px-2 py-1 text-xs text-slate-200 focus:outline-none focus:border-indigo-500 transition-colors disabled:opacity-50"
+              >
+                <option value="">(Uncategorized)</option>
+                {categories.map((cat) => (
+                  <option key={cat.id} value={cat.id}>
+                    {cat.name}
+                  </option>
+                ))}
+              </select>
             </div>
 
             <div className="p-3 rounded-lg bg-slate-950 border border-slate-800">
-              <div className="text-slate-500 font-medium mb-1">Status</div>
-              <div className="font-mono text-slate-200">
+              <div className="text-slate-500 font-medium mb-1.5">Status</div>
+              <div className="font-mono text-slate-200 text-xs flex items-center h-7">
                 {document.status}
               </div>
             </div>

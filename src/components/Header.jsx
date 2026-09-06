@@ -21,6 +21,8 @@ export default function Header({
   onUploadFile,
   selectedCategoryName,
   onClearCategory,
+  selectedFolderName,
+  onClearFolder,
   onOpenSyncSettings,
   onOpenLogin
 }) {
@@ -37,8 +39,8 @@ export default function Header({
 
   return (
     <header className="h-14 bg-slate-900/90 backdrop-blur border-b border-slate-800 px-4 flex items-center justify-between gap-4 shrink-0">
-      {/* Search Input & Category Filter */}
-      <div className="flex items-center space-x-2 flex-1 max-w-xl">
+      {/* Search Input & Category/Folder Filter */}
+      <div className="flex items-center space-x-2 flex-1 max-w-2xl">
         <div className="relative flex-1">
           <Search className="w-4 h-4 text-slate-400 absolute left-3 top-1/2 -translate-y-1/2 pointer-events-none" />
           <input
@@ -59,9 +61,18 @@ export default function Header({
         </div>
 
         {selectedCategoryName && (
-          <div className="flex items-center space-x-1 px-2.5 py-1 bg-indigo-950/60 border border-indigo-700/50 rounded-md text-xs text-indigo-300 font-medium">
+          <div className="flex items-center space-x-1 px-2.5 py-1 bg-indigo-950/60 border border-indigo-700/50 rounded-md text-xs text-indigo-300 font-medium shrink-0">
             <span>{selectedCategoryName}</span>
             <button onClick={onClearCategory} className="hover:text-white ml-1">
+              <X className="w-3 h-3" />
+            </button>
+          </div>
+        )}
+
+        {selectedFolderName && (
+          <div className="flex items-center space-x-1 px-2.5 py-1 bg-sky-950/60 border border-sky-700/50 rounded-md text-xs text-sky-300 font-medium shrink-0">
+            <span>Folder: {selectedFolderName}</span>
+            <button onClick={onClearFolder} className="hover:text-white ml-1">
               <X className="w-3 h-3" />
             </button>
           </div>

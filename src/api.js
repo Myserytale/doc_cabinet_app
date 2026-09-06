@@ -70,15 +70,82 @@ export const api = {
     return await res.json();
   },
 
-  async listDocuments(categoryId = null) {
+  async createCategory(name, color = '#6366f1') {
+    const res = await fetch(`${currentServerUrl}/api/categories`, {
+      method: 'POST',
+      headers: getHeaders(),
+      body: JSON.stringify({ name, color })
+    });
+    checkStatus(res);
+    if (!res.ok) {
+      const err = await res.text();
+      throw new Error(err || `Failed to create category (${res.status})`);
+    }
+    return await res.json();
+  },
+
+  async deleteCategory(id) {
+    const res = await fetch(`${currentServerUrl}/api/categories/${id}`, {
+      method: 'DELETE',
+      headers: getHeaders()
+    });
+    checkStatus(res);
+    if (!res.ok) throw new Error(`Failed to delete category (${res.status})`);
+    return true;
+  },
+
+  async listDocuments(categoryId = null, sourcePathPrefix = null) {
     const url = new URL(`${currentServerUrl}/api/documents`);
     if (categoryId) url.searchParams.append('categoryId', categoryId);
+    if (sourcePathPrefix) url.searchParams.append('sourcePathPrefix', sourcePathPrefix);
 
     const res = await fetch(url.toString(), {
       headers: getHeaders()
     });
     checkStatus(res);
     if (!res.ok) throw new Error(`Failed to fetch documents (${res.status})`);
+    return await res.json();
+  },
+
+  async updateDocumentCategory(documentId, categoryId = null) {
+    const res = await fetch(`${currentServerUrl}/api/documents/${documentId}/category`, {
+      method: 'PUT',
+      headers: getHeaders(),
+      body: JSON.stringify({ categoryId })
+    });
+    checkStatus(res);
+    if (!res.ok) {
+      const err = await res.text();
+      throw new Error(err || `Failed to update document category (${res.status})`);
+    }
+    return await res.json();
+  },
+
+  async bulkSetCategory(documentIds, categoryId = null) {
+    const res = await fetch(`${currentServerUrl}/api/documents/bulk-category`, {
+      method: 'POST',
+      headers: getHeaders(),
+      body: JSON.stringify({ documentIds, categoryId })
+    });
+    checkStatus(res);
+    if (!res.ok) {
+      const err = await res.text();
+      throw new Error(err || `Bulk category assignment failed (${res.status})`);
+    }
+    return await res.json();
+  },
+
+  async bulkDelete(documentIds) {
+    const res = await fetch(`${currentServerUrl}/api/documents/bulk-delete`, {
+      method: 'POST',
+      headers: getHeaders(),
+      body: JSON.stringify({ documentIds })
+    });
+    checkStatus(res);
+    if (!res.ok) {
+      const err = await res.text();
+      throw new Error(err || `Bulk delete failed (${res.status})`);
+    }
     return await res.json();
   },
 

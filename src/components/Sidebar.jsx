@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { useState } from 'react';
 import { 
   FolderSync, 
   Files, 
@@ -9,13 +9,22 @@ import {
   Server, 
   CheckCircle2, 
   AlertCircle,
-  FolderOpen
+  FolderOpen,
+  Plus,
+  Trash2,
+  Check,
+  X
 } from 'lucide-react';
 
 export default function Sidebar({
   categories = [],
   selectedCategory,
   onSelectCategory,
+  onCreateCategory,
+  onDeleteCategory,
+  watchedFolders = [],
+  selectedFolder = null,
+  onSelectFolder,
   totalDocuments = 0,
   syncStatus = {},
   onOpenSyncSettings,
@@ -25,6 +34,32 @@ export default function Sidebar({
   username = '',
   serverUrl = ''
 }) {
+  const [isAddingCategory, setIsAddingCategory] = useState(false);
+  const [newCategoryName, setNewCategoryName] = useState('');
+  const [newCategoryColor, setNewCategoryColor] = useState('#6366f1');
+  const [isSubmittingCat, setIsSubmittingCat] = useState(false);
+
+  const handleCreateCategorySubmit = async (e) => {
+    e.preventDefault();
+    if (!newCategoryName.trim() || isSubmittingCat) return;
+    setIsSubmittingCat(true);
+    try {
+      if (onCreateCategory) {
+        await onCreateCategory(newCategoryName.trim(), newCategoryColor);
+      }
+      setNewCategoryName('');
+      setIsAddingCategory(false);
+    } catch (err) {
+      alert('Failed to create category: ' + err.message);
+    } finally {
+      setIsSubmittingCat(false);
+    }
+  };
+
+  const activeFolders = (watchedFolders && watchedFolders.length > 0)
+    ? watchedFolders
+    : (syncStatus.watchedFolders || []);
+
   return (
     <aside className="w-64 bg-slate-900 border-r border-slate-800 flex flex-col h-full shrink-0 select-none">
       {/* Brand Header */}
@@ -48,9 +83,12 @@ export default function Sidebar({
             Documents
           </p>
           <button
-            onClick={() => onSelectCategory(null)}
+            onClick={() => {
+              onSelectCategory(null);
+              if (onSelectFolder) onSelectFolder(null);
+            }}
             className={`w-full flex items-center justify-between px-2.5 py-1.5 rounded-md text-sm font-medium transition-colors ${
-              selectedCategory === null
+              selectedCategory === null && selectedFolder === null
                 ? 'bg-indigo-600/15 text-indigo-400 border border-indigo-500/30'
                 : 'text-slate-300 hover:bg-slate-800/60 hover:text-white'
             }`}
@@ -67,9 +105,69 @@ export default function Sidebar({
 
         {/* Categories */}
         <div>
-          <p className="px-2 mb-2 text-xs font-semibold uppercase tracking-wider text-slate-500">
-            Categories
-          </p>
+          <div className="flex items-center justify-between px-2 mb-2">
+            <p className="text-xs font-semibold uppercase tracking-wider text-slate-500">
+              Categories
+            </p>
+            <button
+              onClick={() => setIsAddingCategory(!isAddingCategory)}
+              title="Add Category"
+              className="p-1 rounded text-slate-400 hover:text-white hover:bg-slate-800 transition-colors"
+            >
+              <Plus className="w-3.5 h-3.5" />
+            </button>
+          </div>
+
+          {/* New Category Inline Form */}
+          {isAddingCategory && (
+            <form onSubmit={handleCreateCategorySubmit} className="p-2 mb-2 rounded-md bg-slate-950 border border-slate-800 space-y-2">
+              <input
+                type="text"
+                placeholder="Category name"
+                value={newCategoryName}
+                onChange={(e) => setNewCategoryName(e.target.value)}
+                autoFocus
+                className="w-full bg-slate-900 border border-slate-800 rounded px-2 py-1 text-xs text-white placeholder-slate-500 focus:outline-none focus:border-indigo-500"
+              />
+              <div className="flex items-center justify-between">
+                <div className="flex items-center space-x-1.5">
+                  {['#6366f1', '#10b981', '#3b82f6', '#8b5cf6', '#ec4899', '#f59e0b'].map((c) => (
+                    <button
+                      key={c}
+                      type="button"
+                      onClick={() => setNewCategoryColor(c)}
+                      className={`w-3.5 h-3.5 rounded-full transition-transform ${
+                        newCategoryColor === c
+                          ? 'scale-125 ring-2 ring-white ring-offset-1 ring-offset-slate-950'
+                          : 'opacity-70 hover:opacity-100'
+                      }`}
+                      style={{ backgroundColor: c }}
+                    />
+                  ))}
+                </div>
+                <div className="flex items-center space-x-1">
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setIsAddingCategory(false);
+                      setNewCategoryName('');
+                    }}
+                    className="p-1 text-slate-400 hover:text-white rounded hover:bg-slate-800"
+                  >
+                    <X className="w-3.5 h-3.5" />
+                  </button>
+                  <button
+                    type="submit"
+                    disabled={!newCategoryName.trim() || isSubmittingCat}
+                    className="p-1 text-indigo-400 hover:text-indigo-300 rounded hover:bg-indigo-950/40 disabled:opacity-40"
+                  >
+                    <Check className="w-3.5 h-3.5" />
+                  </button>
+                </div>
+              </div>
+            </form>
+          )}
+
           <div className="space-y-1">
             {categories.length === 0 ? (
               <p className="px-2 py-1 text-xs text-slate-500 italic">No categories yet</p>
@@ -77,9 +175,85 @@ export default function Sidebar({
               categories.map((cat) => {
                 const isSelected = selectedCategory === cat.id;
                 return (
-                  <button
+                  <div
                     key={cat.id}
-                    onClick={() => onSelectCategory(cat.id)}
+                    className={`group w-full flex items-center justify-between px-2.5 py-1.5 rounded-md text-sm transition-colors ${
+                      isSelected
+                        ? 'bg-indigo-600/15 text-indigo-400 border border-indigo-500/30'
+                        : 'text-slate-300 hover:bg-slate-800/60 hover:text-white'
+                    }`}
+                  >
+                    <button
+                      onClick={() => onSelectCategory(isSelected ? null : cat.id)}
+                      className="flex-1 flex items-center space-x-2.5 truncate text-left"
+                    >
+                      <span
+                        className="w-2.5 h-2.5 rounded-full shrink-0"
+                        style={{ backgroundColor: cat.color || '#6366f1' }}
+                      />
+                      <span className="truncate">{cat.name}</span>
+                    </button>
+                    <div className="flex items-center space-x-1 ml-2 shrink-0">
+                      <span className="text-xs bg-slate-800/70 px-1.5 py-0.5 rounded text-slate-400 font-mono">
+                        {cat.documentCount || 0}
+                      </span>
+                      {onDeleteCategory && (
+                        <button
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            if (confirm(`Delete category "${cat.name}"? Any documents in this category will become uncategorized.`)) {
+                              onDeleteCategory(cat.id);
+                            }
+                          }}
+                          title="Delete category"
+                          className="opacity-0 group-hover:opacity-100 p-0.5 text-slate-500 hover:text-rose-400 transition-opacity"
+                        >
+                          <Trash2 className="w-3 h-3" />
+                        </button>
+                      )}
+                    </div>
+                  </div>
+                );
+              })
+            )}
+          </div>
+        </div>
+
+        {/* Watched Folders Section */}
+        <div>
+          <div className="flex items-center justify-between px-2 mb-2">
+            <p className="text-xs font-semibold uppercase tracking-wider text-slate-500">
+              Watched Folders
+            </p>
+            <button
+              onClick={onOpenSyncSettings}
+              title="Configure watched folders"
+              className="p-1 rounded text-slate-400 hover:text-white hover:bg-slate-800 transition-colors"
+            >
+              <Settings className="w-3.5 h-3.5" />
+            </button>
+          </div>
+          <div className="space-y-1">
+            {activeFolders.length === 0 ? (
+              <button
+                onClick={onOpenSyncSettings}
+                className="w-full text-left px-2.5 py-1.5 rounded-md text-xs text-slate-500 hover:text-slate-300 italic"
+              >
+                + Add a watched folder
+              </button>
+            ) : (
+              activeFolders.map((folder) => {
+                const folderName = folder.replace(/\/$/, '').split('/').pop() || folder;
+                const isSelected = selectedFolder === folder;
+                return (
+                  <button
+                    key={folder}
+                    onClick={() => {
+                      if (onSelectFolder) {
+                        onSelectFolder(isSelected ? null : folder);
+                      }
+                    }}
+                    title={folder}
                     className={`w-full flex items-center justify-between px-2.5 py-1.5 rounded-md text-sm transition-colors ${
                       isSelected
                         ? 'bg-indigo-600/15 text-indigo-400 border border-indigo-500/30'
@@ -87,15 +261,14 @@ export default function Sidebar({
                     }`}
                   >
                     <div className="flex items-center space-x-2.5 truncate">
-                      <span
-                        className="w-2.5 h-2.5 rounded-full shrink-0"
-                        style={{ backgroundColor: cat.color || '#6366f1' }}
-                      />
-                      <span className="truncate">{cat.name}</span>
+                      <FolderOpen className="w-4 h-4 text-slate-400 shrink-0" />
+                      <span className="truncate">{folderName}</span>
                     </div>
-                    <span className="text-xs bg-slate-800/70 px-1.5 py-0.5 rounded text-slate-400 font-mono ml-2">
-                      {cat.documentCount || 0}
-                    </span>
+                    {isSelected && (
+                      <span className="text-[10px] text-indigo-400 font-mono shrink-0 ml-1">
+                        Active
+                      </span>
+                    )}
                   </button>
                 );
               })
@@ -114,11 +287,11 @@ export default function Sidebar({
               className="w-full flex items-center justify-between px-2.5 py-1.5 rounded-md text-sm text-slate-300 hover:bg-slate-800/60 hover:text-white transition-colors"
             >
               <div className="flex items-center space-x-2.5">
-                <FolderOpen className="w-4 h-4 text-slate-400" />
-                <span>Watched Folders</span>
+                <FolderSync className="w-4 h-4 text-slate-400" />
+                <span>Daemon Settings</span>
               </div>
               <span className="text-xs bg-slate-800 px-2 py-0.5 rounded text-slate-400 font-mono">
-                {syncStatus.watchedFolders?.length || 0}
+                {activeFolders.length}
               </span>
             </button>
 

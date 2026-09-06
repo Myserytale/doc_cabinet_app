@@ -16,6 +16,8 @@ import {
 
 export default function DocumentCard({
   document,
+  isSelected = false,
+  onToggleSelect,
   onSelect,
   onDelete,
   onDownload
@@ -89,12 +91,32 @@ export default function DocumentCard({
   return (
     <div
       onClick={() => onSelect(document)}
-      className="group relative bg-slate-900 border border-slate-800 hover:border-slate-700 rounded-lg p-4 transition-all duration-150 hover:shadow-md cursor-pointer flex flex-col justify-between"
+      className={`group relative border rounded-lg p-4 transition-all duration-150 hover:shadow-md cursor-pointer flex flex-col justify-between ${
+        isSelected
+          ? 'bg-indigo-950/25 border-indigo-500/60 shadow-indigo-950/30'
+          : 'bg-slate-900 border-slate-800 hover:border-slate-700'
+      }`}
     >
       <div>
-        {/* Header Row: Icon, Title, Status */}
-        <div className="flex items-start justify-between gap-3 mb-2">
-          <div className="flex items-start space-x-3 truncate">
+        {/* Header Row: Checkbox, Icon, Title, Status */}
+        <div className="flex items-start justify-between gap-2.5 mb-2">
+          <div className="flex items-start space-x-2.5 truncate">
+            {onToggleSelect && (
+              <div
+                className="mt-1"
+                onClick={(e) => {
+                  e.stopPropagation();
+                  onToggleSelect(document.id);
+                }}
+              >
+                <input
+                  type="checkbox"
+                  checked={isSelected}
+                  onChange={() => {}}
+                  className="w-4 h-4 rounded border-slate-700 bg-slate-950 text-indigo-600 focus:ring-indigo-500 focus:ring-offset-slate-900 cursor-pointer"
+                />
+              </div>
+            )}
             <div className="p-2 rounded-md bg-slate-950 border border-slate-800/80 shrink-0">
               {getFileIcon(document.originalFilename, document.mimeType)}
             </div>

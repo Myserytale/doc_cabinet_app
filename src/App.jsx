@@ -16,6 +16,8 @@ export default function App() {
   const [categories, setCategories] = useState([]);
   const [loading, setLoading] = useState(false);
   const [selectedCategory, setSelectedCategory] = useState(null);
+  const [selectedFolder, setSelectedFolder] = useState(null);
+  const [selectedDocIds, setSelectedDocIds] = useState(new Set());
   const [searchQuery, setSearchQuery] = useState('');
   const [selectedDocument, setSelectedDocument] = useState(null);
 
@@ -90,7 +92,7 @@ export default function App() {
   }, []);
 
   // Fetch documents and categories
-  const loadData = useCallback(async (catId = selectedCategory, query = searchQuery) => {
+  const loadData = useCallback(async (catId = selectedCategory, folder = selectedFolder, query = searchQuery) => {
     if (!config?.token) return;
     setLoading(true);
     try {
@@ -105,9 +107,13 @@ export default function App() {
       // Load documents or search results
       if (query && query.trim().length > 0) {
         const searchRes = await api.searchDocuments(query.trim(), catId);
-        setDocuments(searchRes.items || []);
+        let items = searchRes.items || [];
+        if (folder) {
+          items = items.filter((d) => d.sourcePath && d.sourcePath.startsWith(folder));
+        }
+        setDocuments(items);
       } else {
-        const docs = await api.listDocuments(catId);
+        const docs = await api.listDocuments(catId, folder);
         setDocuments(docs || []);
       }
     } catch (err) {
@@ -115,26 +121,113 @@ export default function App() {
     } finally {
       setLoading(false);
     }
-  }, [config?.token, selectedCategory, searchQuery]);
+  }, [config?.token, selectedCategory, selectedFolder, searchQuery]);
 
   // Trigger reload on selection change
   useEffect(() => {
     if (config?.token) {
-      loadData(selectedCategory, searchQuery);
+      loadData(selectedCategory, selectedFolder, searchQuery);
     }
-  }, [config?.token, selectedCategory, searchQuery, loadData]);
+  }, [config?.token, selectedCategory, selectedFolder, searchQuery, loadData]);
 
   // Handlers
   const handleSelectCategory = (catId) => {
     setSelectedCategory(catId);
+    setSelectedDocIds(new Set());
   };
 
   const handleClearCategory = () => {
     setSelectedCategory(null);
+    setSelectedDocIds(new Set());
+  };
+
+  const handleSelectFolder = (folder) => {
+    setSelectedFolder(folder);
+    setSelectedDocIds(new Set());
+  };
+
+  const handleClearFolder = () => {
+    setSelectedFolder(null);
+    setSelectedDocIds(new Set());
   };
 
   const handleSearchChange = (q) => {
     setSearchQuery(q);
+    setSelectedDocIds(new Set());
+  };
+
+  const handleToggleSelectDoc = (id) => {
+    setSelectedDocIds((prev) => {
+      const next = new Set(prev);
+      if (next.has(id)) next.delete(id);
+      else next.add(id);
+      return next;
+    });
+  };
+
+  const handleSelectAllDocs = () => {
+    if (documents.length > 0 && documents.every((d) => selectedDocIds.has(d.id))) {
+      setSelectedDocIds(new Set());
+    } else {
+      setSelectedDocIds(new Set(documents.map((d) => d.id)));
+    }
+  };
+
+  const handleClearSelection = () => {
+    setSelectedDocIds(new Set());
+  };
+
+  const handleUpdateDocumentCategory = async (docId, categoryId) => {
+    try {
+      const updated = await api.updateDocumentCategory(docId, categoryId);
+      setDocuments((prev) => prev.map((d) => (d.id === docId ? { ...d, ...updated } : d)));
+      if (selectedDocument && selectedDocument.id === docId) {
+        setSelectedDocument((prev) => ({ ...prev, ...updated }));
+      }
+      api.getCategories().then(setCategories).catch(() => {});
+    } catch (err) {
+      alert('Failed to update category: ' + err.message);
+    }
+  };
+
+  const handleBulkCategory = async (categoryId) => {
+    if (selectedDocIds.size === 0) return;
+    try {
+      await api.bulkSetCategory(Array.from(selectedDocIds), categoryId);
+      setSelectedDocIds(new Set());
+      loadData();
+    } catch (err) {
+      alert('Bulk category assignment failed: ' + err.message);
+    }
+  };
+
+  const handleBulkDelete = async () => {
+    if (selectedDocIds.size === 0) return;
+    try {
+      await api.bulkDelete(Array.from(selectedDocIds));
+      setSelectedDocIds(new Set());
+      loadData();
+    } catch (err) {
+      alert('Bulk delete failed: ' + err.message);
+    }
+  };
+
+  const handleCreateCategory = async (name, color) => {
+    const newCat = await api.createCategory(name, color);
+    setCategories((prev) => [...prev, newCat]);
+    return newCat;
+  };
+
+  const handleDeleteCategory = async (catId) => {
+    try {
+      await api.deleteCategory(catId);
+      if (selectedCategory === catId) {
+        setSelectedCategory(null);
+      }
+      loadData();
+    } catch (err) {
+      alert('Failed to delete category: ' + err.message);
+    }
   };
 
   const handleSaveConfig = async (newConfig) => {
@@ -166,6 +259,11 @@ export default function App() {
     try {
       await api.deleteDocument(id);
       setDocuments((prev) => prev.filter((d) => d.id !== id));
+      setSelectedDocIds((prev) => {
+        const next = new Set(prev);
+        next.delete(id);
+        return next;
+      });
       loadData();
     } catch (err) {
       alert('Delete failed: ' + err.message);
@@ -227,10 +325,12 @@ export default function App() {
     initApiConfig(updated.serverUrl, '');
     setDocuments([]);
     setCategories([]);
+    setSelectedDocIds(new Set());
     setIsLoginOpen(true);
   };
 
   const selectedCategoryObj = categories.find((c) => c.id === selectedCategory);
+  const selectedFolderName = selectedFolder ? selectedFolder.replace(/\/$/, '').split('/').pop() : null;
 
   return (
     <div className="flex h-screen w-screen overflow-hidden bg-slate-950 font-sans text-slate-100">
@@ -239,6 +339,11 @@ export default function App() {
         categories={categories}
         selectedCategory={selectedCategory}
         onSelectCategory={handleSelectCategory}
+        onCreateCategory={handleCreateCategory}
+        onDeleteCategory={handleDeleteCategory}
+        watchedFolders={config?.watchedFolders || syncStatus.watchedFolders || []}
+        selectedFolder={selectedFolder}
+        onSelectFolder={handleSelectFolder}
         totalDocuments={documents.length}
         syncStatus={syncStatus}
         onOpenSyncSettings={() => setIsSyncSettingsOpen(true)}
@@ -260,6 +365,8 @@ export default function App() {
           onUploadFile={handleUploadFile}
           selectedCategoryName={selectedCategoryObj?.name}
           onClearCategory={handleClearCategory}
+          selectedFolderName={selectedFolderName}
+          onClearFolder={handleClearFolder}
           onOpenSyncSettings={() => setIsSyncSettingsOpen(true)}
           onOpenLogin={() => setIsLoginOpen(true)}
         />
@@ -268,8 +375,15 @@ export default function App() {
         <main className="flex-1 flex flex-col overflow-hidden bg-slate-950">
           <DocumentList
             documents={documents}
+            categories={categories}
             loading={loading}
             isSearch={Boolean(searchQuery)}
+            selectedIds={selectedDocIds}
+            onToggleSelect={handleToggleSelectDoc}
+            onSelectAll={handleSelectAllDocs}
+            onClearSelection={handleClearSelection}
+            onBulkCategory={handleBulkCategory}
+            onBulkDelete={handleBulkDelete}
             onSelectDocument={(doc) => setSelectedDocument(doc)}
             onDeleteDocument={handleDeleteDocument}
             onDownloadDocument={handleDownloadDocument}
@@ -280,10 +394,12 @@ export default function App() {
       {/* Document Details Modal */}
       <DocumentModal
         document={selectedDocument}
+        categories={categories}
         onClose={() => setSelectedDocument(null)}
         onDownload={handleDownloadDocument}
         onDelete={handleDeleteDocument}
         onReindex={handleReindexDocument}
+        onUpdateCategory={handleUpdateDocumentCategory}
       />
 
       {/* Sync Settings Modal */}
