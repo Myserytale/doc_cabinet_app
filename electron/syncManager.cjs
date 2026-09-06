@@ -16,6 +16,7 @@ class SyncManager {
     this.maxHistory = 100;
     this.isProcessing = false;
     this.syncQueue = [];
+    this.queuedSet = new Set();
     this.activeUploads = 0;
 
     this.config = this.loadConfig();
@@ -27,7 +28,7 @@ class SyncManager {
       token: '',
       username: '',
       watchedFolders: [],
-      extensions: ['.pdf', '.docx', '.doc', '.txt', '.md', '.xlsx', '.csv', '.odt', '.rtf', '.pptx', '.json'],
+      extensions: ['.pdf', '.docx', '.doc', '.txt', '.md', '.xlsx', '.csv', '.odt', '.rtf', '.pptx'],
       debounceMs: 2000,
       autoSync: true
     };
@@ -48,6 +49,7 @@ class SyncManager {
   saveConfig(newConfig) {
     this.config = { ...this.config, ...newConfig };
     try {
+      fs.mkdirSync(path.dirname(this.configFile), { recursive: true });
       fs.writeFileSync(this.configFile, JSON.stringify(this.config, null, 2), 'utf-8');
     } catch (err) {
       console.error('Failed to write config file:', err);
@@ -127,7 +129,7 @@ class SyncManager {
       return;
     }
 
-    const ignoredRegex = /(^|[\/\\])(\..|node_modules|\.git|dist|build|target|\.venv|__pycache__|~\$|\.tmp|\.swp|\.DS_Store|Thumbs\.db)/;
+    const ignoredRegex = /(^|[\/\\])(\..|node_modules|\.git|dist|build|target|\.venv|__pycache__|\.idea|\.vscode|vendor|bin|obj|~\$|\.tmp|\.swp|\.DS_Store|Thumbs\.db)/;
 
     this.watcher = chokidar.watch(validFolders, {
       ignored: ignoredRegex,
@@ -137,7 +139,7 @@ class SyncManager {
         stabilityThreshold: 1500,
         pollInterval: 200
       },
-      depth: 10
+      depth: 12
     });
 
     this.watcher.on('add', filePath => this.handleFileEvent('add', filePath));
@@ -188,7 +190,8 @@ class SyncManager {
   }
 
   enqueueFile(filePath) {
-    if (!this.syncQueue.includes(filePath)) {
+    if (!this.queuedSet.has(filePath)) {
+      this.queuedSet.add(filePath);
       this.syncQueue.push(filePath);
       this.processQueue();
     }
@@ -201,10 +204,31 @@ class SyncManager {
     this.isProcessing = true;
     this.onStatusChange(this.getStatus());
 
-    while (this.syncQueue.length > 0) {
-      const filePath = this.syncQueue.shift();
-      await this.syncFile(filePath);
+    const CONCURRENCY = 4;
+    const worker = async () => {
+      while (this.syncQueue.length > 0) {
+        if (this.isTokenExpired()) {
+          // Abort queue processing if session expired
+          this.syncQueue = [];
+          this.queuedSet.clear();
+          break;
+        }
+
+        const filePath = this.syncQueue.shift();
+        if (filePath) {
+          this.queuedSet.delete(filePath);
+          await this.syncFile(filePath);
+        }
+      }
+    };
+
+    const workers = [];
+    const poolSize = Math.min(CONCURRENCY, this.syncQueue.length);
+    for (let i = 0; i < poolSize; i++) {
+      workers.push(worker());
     }
+
+    await Promise.all(workers);
 
     this.isProcessing = false;
     this.onStatusChange(this.getStatus());
@@ -250,6 +274,17 @@ class SyncManager {
 
       const stat = fs.statSync(filePath);
       if (!stat.isFile() || stat.size === 0) {
+        return;
+      }
+
+      // Check max file size (50MB)
+      if (stat.size > 50 * 1024 * 1024) {
+        this.addHistory({
+          filePath,
+          fileName,
+          status: 'skipped',
+          message: 'Skipped: file exceeds 50MB upload limit'
+        });
         return;
       }
 
@@ -377,7 +412,6 @@ class SyncManager {
       '.pdf': 'application/pdf',
       '.txt': 'text/plain',
       '.md': 'text/markdown',
-      '.json': 'application/json',
       '.csv': 'text/csv',
       '.docx': 'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
       '.doc': 'application/msword',
@@ -394,12 +428,17 @@ class SyncManager {
       return { queued: 0, message: 'No folders configured to watch' };
     }
 
+    const ignoredDirs = new Set([
+      'node_modules', '.git', 'dist', 'build', 'target', '.venv',
+      '__pycache__', '.idea', '.vscode', 'vendor', 'bin', 'obj'
+    ]);
+
     let count = 0;
     const scanDir = (dir) => {
       try {
         const entries = fs.readdirSync(dir, { withFileTypes: true });
         for (const entry of entries) {
-          if (entry.name.startsWith('.') || ['node_modules', '.git', 'dist', 'build', 'target', '.venv', '__pycache__'].includes(entry.name)) {
+          if (entry.name.startsWith('.') || ignoredDirs.has(entry.name)) {
             continue;
           }
           const full = path.join(dir, entry.name);
