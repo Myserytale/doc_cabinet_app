@@ -1,9 +1,14 @@
 let currentServerUrl = 'http://100.113.158.58:8080';
 let currentToken = '';
+let authExpiredListener = null;
 
 export const initApiConfig = (serverUrl, token) => {
   if (serverUrl) currentServerUrl = serverUrl.replace(/\/$/, '');
   if (token) currentToken = token;
+};
+
+export const setAuthExpiredListener = (callback) => {
+  authExpiredListener = callback;
 };
 
 export const getServerUrl = () => currentServerUrl;
@@ -18,6 +23,13 @@ const getHeaders = (isMultipart = false) => {
     headers['Authorization'] = `Bearer ${currentToken}`;
   }
   return headers;
+};
+
+const checkStatus = (res) => {
+  if (res.status === 401 || res.status === 403) {
+    if (authExpiredListener) authExpiredListener();
+  }
+  return res;
 };
 
 export const api = {
@@ -46,7 +58,6 @@ export const api = {
       const err = await res.text();
       throw new Error(err || `Registration failed (${res.status})`);
     }
-    // Auto-login to obtain JWT token
     return await this.login(username, password);
   },
 
@@ -54,6 +65,7 @@ export const api = {
     const res = await fetch(`${currentServerUrl}/api/categories`, {
       headers: getHeaders()
     });
+    checkStatus(res);
     if (!res.ok) throw new Error(`Failed to fetch categories (${res.status})`);
     return await res.json();
   },
@@ -65,6 +77,7 @@ export const api = {
     const res = await fetch(url.toString(), {
       headers: getHeaders()
     });
+    checkStatus(res);
     if (!res.ok) throw new Error(`Failed to fetch documents (${res.status})`);
     return await res.json();
   },
@@ -79,6 +92,7 @@ export const api = {
     const res = await fetch(url.toString(), {
       headers: getHeaders()
     });
+    checkStatus(res);
     if (!res.ok) throw new Error(`Search failed (${res.status})`);
     return await res.json();
   },
@@ -87,6 +101,7 @@ export const api = {
     const res = await fetch(`${currentServerUrl}/api/documents/${id}`, {
       headers: getHeaders()
     });
+    checkStatus(res);
     if (!res.ok) throw new Error(`Failed to load document (${res.status})`);
     return await res.json();
   },
@@ -96,6 +111,7 @@ export const api = {
       method: 'DELETE',
       headers: getHeaders()
     });
+    checkStatus(res);
     if (!res.ok) throw new Error(`Failed to delete document (${res.status})`);
     return true;
   },
@@ -105,6 +121,7 @@ export const api = {
       method: 'POST',
       headers: getHeaders()
     });
+    checkStatus(res);
     if (!res.ok) throw new Error(`Failed to reindex document (${res.status})`);
     return true;
   },
@@ -120,6 +137,7 @@ export const api = {
       headers: getHeaders(true),
       body: formData
     });
+    checkStatus(res);
     if (!res.ok) {
       const err = await res.text();
       throw new Error(err || `Upload failed (${res.status})`);

@@ -20,12 +20,11 @@ export default function Sidebar({
   syncStatus = {},
   onOpenSyncSettings,
   onOpenHistory,
+  onOpenLogin,
   onLogout,
   username = '',
   serverUrl = ''
 }) {
-  const isOnline = syncStatus.hasToken;
-
   return (
     <aside className="w-64 bg-slate-900 border-r border-slate-800 flex flex-col h-full shrink-0 select-none">
       {/* Brand Header */}
@@ -154,6 +153,16 @@ export default function Sidebar({
           <div className="truncate text-slate-400 font-mono text-[11px]">
             {serverUrl.replace(/^https?:\/\//, '')}
           </div>
+
+          {syncStatus.isTokenExpired && (
+            <button
+              onClick={onOpenLogin}
+              className="w-full mt-2 px-2 py-1 rounded bg-amber-500/15 border border-amber-500/30 text-amber-300 text-[11px] font-medium text-left flex items-center justify-between hover:bg-amber-500/25 transition-colors"
+            >
+              <span>Session Expired</span>
+              <span className="underline">Sign In</span>
+            </button>
+          )}
         </div>
 
         <div className="flex items-center justify-between px-2 py-1">

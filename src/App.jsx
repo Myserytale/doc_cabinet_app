@@ -6,7 +6,7 @@ import DocumentModal from './components/DocumentModal';
 import SyncSettingsModal from './components/SyncSettingsModal';
 import SyncHistoryDrawer from './components/SyncHistoryDrawer';
 import LoginModal from './components/LoginModal';
-import { api, initApiConfig } from './api';
+import { api, initApiConfig, setAuthExpiredListener } from './api';
 
 export default function App() {
   const [config, setConfig] = useState(null);
@@ -26,6 +26,10 @@ export default function App() {
 
   // Load config & subscribe to IPC events on mount
   useEffect(() => {
+    setAuthExpiredListener(() => {
+      setIsLoginOpen(true);
+    });
+
     async function init() {
       let cfg = {};
       if (window.desktopApi?.getConfig) {
@@ -42,14 +46,15 @@ export default function App() {
       setConfig(cfg);
       initApiConfig(cfg.serverUrl, cfg.token);
 
-      if (!cfg.token) {
-        setIsLoginOpen(true);
-      }
-
       if (window.desktopApi?.getSyncStatus) {
         const st = await window.desktopApi.getSyncStatus();
         setSyncStatus(st);
         if (st.history) setSyncHistory(st.history);
+        if (st.isTokenExpired || !cfg.token) {
+          setIsLoginOpen(true);
+        }
+      } else if (!cfg.token) {
+        setIsLoginOpen(true);
       }
     }
 
@@ -58,11 +63,17 @@ export default function App() {
     // Listen to status changes from Electron main process
     const unlistenStatus = window.desktopApi?.onSyncStatus?.((status) => {
       setSyncStatus(status);
+      if (status.isTokenExpired) {
+        setIsLoginOpen(true);
+      }
       if (status.history) setSyncHistory(status.history);
     });
 
     // Listen to individual sync events
     const unlistenEvent = window.desktopApi?.onSyncEvent?.((ev) => {
+      if (ev.type === 'auth_expired' || ev.isAuthError) {
+        setIsLoginOpen(true);
+      }
       setSyncHistory((prev) => [ev, ...prev.slice(0, 49)]);
       // When a file is uploaded, reload documents to show latest state
       if (ev.status === 'uploaded') {
@@ -232,6 +243,7 @@ export default function App() {
         syncStatus={syncStatus}
         onOpenSyncSettings={() => setIsSyncSettingsOpen(true)}
         onOpenHistory={() => setIsHistoryOpen(true)}
+        onOpenLogin={() => setIsLoginOpen(true)}
         onLogout={handleLogout}
         username={config?.username}
         serverUrl={config?.serverUrl || 'http://100.113.158.58:8080'}
@@ -249,6 +261,7 @@ export default function App() {
           selectedCategoryName={selectedCategoryObj?.name}
           onClearCategory={handleClearCategory}
           onOpenSyncSettings={() => setIsSyncSettingsOpen(true)}
+          onOpenLogin={() => setIsLoginOpen(true)}
         />
 
         {/* Documents Grid / Search View */}
@@ -292,6 +305,7 @@ export default function App() {
       <LoginModal
         isOpen={isLoginOpen}
         defaultServerUrl={config?.serverUrl || 'http://100.113.158.58:8080'}
+        defaultUsername={config?.username || ''}
         onSuccess={handleLoginSuccess}
       />
     </div>

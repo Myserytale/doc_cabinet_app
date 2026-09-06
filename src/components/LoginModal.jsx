@@ -1,19 +1,26 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { Server, Lock, User, Mail, AlertCircle, ArrowRight } from 'lucide-react';
 import { api } from '../api';
 
 export default function LoginModal({
   isOpen,
   defaultServerUrl = 'http://100.113.158.58:8080',
+  defaultUsername = '',
   onSuccess
 }) {
   const [isRegister, setIsRegister] = useState(false);
   const [serverUrl, setServerUrl] = useState(defaultServerUrl);
-  const [username, setUsername] = useState('');
+  const [username, setUsername] = useState(defaultUsername);
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [error, setError] = useState('');
   const [loading, setLoading] = useState(false);
+
+  useEffect(() => {
+    if (defaultUsername) {
+      setUsername(defaultUsername);
+    }
+  }, [defaultUsername]);
 
   if (!isOpen) return null;
 

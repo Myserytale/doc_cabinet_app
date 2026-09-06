@@ -8,7 +8,9 @@ import {
   CheckCircle2, 
   Pause, 
   Play, 
-  SlidersHorizontal 
+  SlidersHorizontal,
+  AlertTriangle,
+  Lock
 } from 'lucide-react';
 
 export default function Header({
@@ -19,7 +21,8 @@ export default function Header({
   onUploadFile,
   selectedCategoryName,
   onClearCategory,
-  onOpenSyncSettings
+  onOpenSyncSettings,
+  onOpenLogin
 }) {
   const fileInputRef = useRef(null);
 
@@ -69,7 +72,15 @@ export default function Header({
       <div className="flex items-center space-x-3">
         {/* Sync Status Badge */}
         <div className="flex items-center space-x-2 px-2.5 py-1 rounded-md bg-slate-950 border border-slate-800 text-xs">
-          {isSyncing ? (
+          {syncStatus.isTokenExpired ? (
+            <button
+              onClick={onOpenLogin}
+              className="flex items-center space-x-1.5 text-amber-400 font-medium hover:underline"
+            >
+              <Lock className="w-3.5 h-3.5" />
+              <span>Session Expired (Click to Sign In)</span>
+            </button>
+          ) : isSyncing ? (
             <div className="flex items-center space-x-1.5 text-indigo-400 font-medium">
               <RefreshCw className="w-3.5 h-3.5 animate-spin" />
               <span>Syncing ({syncStatus.queueLength || 1})</span>
@@ -90,7 +101,7 @@ export default function Header({
         {/* Sync Now Button */}
         <button
           onClick={onTriggerSync}
-          disabled={isSyncing}
+          disabled={isSyncing || syncStatus.isTokenExpired}
           title="Trigger manual directory scan"
           className="flex items-center space-x-1.5 px-3 py-1.5 rounded-md bg-slate-800 hover:bg-slate-700 text-slate-200 hover:text-white text-xs font-medium border border-slate-700/80 transition-colors disabled:opacity-50"
         >
@@ -107,7 +118,8 @@ export default function Header({
         />
         <button
           onClick={() => fileInputRef.current?.click()}
-          className="flex items-center space-x-1.5 px-3 py-1.5 rounded-md bg-indigo-600 hover:bg-indigo-500 text-white text-xs font-medium transition-colors shadow-sm"
+          disabled={syncStatus.isTokenExpired}
+          className="flex items-center space-x-1.5 px-3 py-1.5 rounded-md bg-indigo-600 hover:bg-indigo-500 text-white text-xs font-medium transition-colors shadow-sm disabled:opacity-50"
         >
           <Upload className="w-3.5 h-3.5" />
           <span>Upload</span>

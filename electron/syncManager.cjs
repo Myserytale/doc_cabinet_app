@@ -56,12 +56,27 @@ class SyncManager {
     return this.config;
   }
 
+  isTokenExpired() {
+    if (!this.config.token) return true;
+    try {
+      const parts = this.config.token.split('.');
+      if (parts.length !== 3) return true;
+      const payload = JSON.parse(Buffer.from(parts[1], 'base64').toString('utf-8'));
+      if (!payload.exp) return false;
+      return Date.now() >= payload.exp * 1000;
+    } catch {
+      return true;
+    }
+  }
+
   getStatus() {
+    const expired = this.isTokenExpired();
     return {
       autoSync: this.config.autoSync,
       watchedFolders: this.config.watchedFolders,
       serverUrl: this.config.serverUrl,
-      hasToken: Boolean(this.config.token),
+      hasToken: Boolean(this.config.token) && !expired,
+      isTokenExpired: expired,
       username: this.config.username,
       queueLength: this.syncQueue.length,
       activeUploads: this.activeUploads,
@@ -211,6 +226,14 @@ class SyncManager {
         'Authorization': `Bearer ${this.config.token}`
       }
     });
+    if (res.status === 401 || res.status === 403) {
+      this.onEvent({
+        type: 'auth_expired',
+        isAuthError: true,
+        message: 'Server session expired. Please sign in.'
+      });
+      throw new Error(`Authentication expired (HTTP ${res.status}). Please sign in.`);
+    }
     if (!res.ok) {
       throw new Error(`Checksum verification failed with HTTP ${res.status}`);
     }
@@ -230,12 +253,18 @@ class SyncManager {
         return;
       }
 
-      if (!this.config.token) {
+      if (!this.config.token || this.isTokenExpired()) {
         this.addHistory({
           filePath,
           fileName,
           status: 'error',
-          message: 'Server token missing. Please login first.'
+          isAuthError: true,
+          message: 'Server authentication token expired. Please sign in again.'
+        });
+        this.onEvent({
+          type: 'auth_expired',
+          isAuthError: true,
+          message: 'Server authentication token expired. Please sign in again.'
         });
         return;
       }
@@ -282,6 +311,23 @@ class SyncManager {
 
       this.activeUploads = Math.max(0, this.activeUploads - 1);
 
+      if (uploadRes.status === 401 || uploadRes.status === 403) {
+        this.onEvent({
+          type: 'auth_expired',
+          isAuthError: true,
+          message: 'Authentication token expired during upload. Please sign in.'
+        });
+        this.addHistory({
+          filePath,
+          fileName,
+          checksum,
+          status: 'error',
+          isAuthError: true,
+          message: `Authentication token expired (HTTP ${uploadRes.status}). Please sign in.`
+        });
+        return;
+      }
+
       if (!uploadRes.ok) {
         const errorText = await uploadRes.text();
         this.addHistory({
@@ -307,12 +353,21 @@ class SyncManager {
 
     } catch (err) {
       this.activeUploads = Math.max(0, this.activeUploads - 1);
+      const isAuthErr = err.message && (err.message.includes('401') || err.message.includes('403') || err.message.includes('Authentication') || err.message.includes('expired'));
       this.addHistory({
         filePath,
         fileName,
         status: 'error',
+        isAuthError: isAuthErr,
         message: err.message || 'Unknown error occurred during sync'
       });
+      if (isAuthErr) {
+        this.onEvent({
+          type: 'auth_expired',
+          isAuthError: true,
+          message: err.message
+        });
+      }
     }
   }
 
