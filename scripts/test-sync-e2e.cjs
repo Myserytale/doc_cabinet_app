@@ -5,7 +5,7 @@ const SyncManager = require('../electron/syncManager.cjs');
 
 async function run() {
   console.log('=== DocVault Desktop Auto-Sync & Deduplication Test ===');
-  const serverUrl = 'http://100.113.158.58:8080';
+  const serverUrl = process.env.DOCVAULT_SERVER_URL || 'http://localhost:8080';
 
   // 1. Authenticate with Homelab
   console.log('1. Authenticating with homelab server at', serverUrl);

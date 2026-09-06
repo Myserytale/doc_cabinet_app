@@ -38,7 +38,7 @@ export default function App() {
         cfg = await window.desktopApi.getConfig();
       } else {
         cfg = {
-          serverUrl: 'http://100.113.158.58:8080',
+          serverUrl: '',
           token: localStorage.getItem('docvault_token') || '',
           username: localStorage.getItem('docvault_username') || '',
           watchedFolders: [],
@@ -351,7 +351,7 @@ export default function App() {
         onOpenLogin={() => setIsLoginOpen(true)}
         onLogout={handleLogout}
         username={config?.username}
-        serverUrl={config?.serverUrl || 'http://100.113.158.58:8080'}
+        serverUrl={config?.serverUrl || ''}
       />
 
       {/* Main Content Area */}
@@ -420,7 +420,7 @@ export default function App() {
       {/* Login Modal */}
       <LoginModal
         isOpen={isLoginOpen}
-        defaultServerUrl={config?.serverUrl || 'http://100.113.158.58:8080'}
+        defaultServerUrl={config?.serverUrl || ''}
         defaultUsername={config?.username || ''}
         onSuccess={handleLoginSuccess}
       />

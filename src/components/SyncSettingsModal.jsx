@@ -19,7 +19,7 @@ export default function SyncSettingsModal({
   onSaveConfig
 }) {
   const [watchedFolders, setWatchedFolders] = useState([]);
-  const [serverUrl, setServerUrl] = useState('http://100.113.158.58:8080');
+  const [serverUrl, setServerUrl] = useState('');
   const [autoSync, setAutoSync] = useState(true);
   const [debounceMs, setDebounceMs] = useState(2000);
   const [extensions, setExtensions] = useState([]);
@@ -30,7 +30,7 @@ export default function SyncSettingsModal({
   useEffect(() => {
     if (config) {
       setWatchedFolders(config.watchedFolders || []);
-      setServerUrl(config.serverUrl || 'http://100.113.158.58:8080');
+      setServerUrl(config.serverUrl || '');
       setAutoSync(config.autoSync !== false);
       setDebounceMs(config.debounceMs || 2000);
       setExtensions(config.extensions || ['.pdf', '.docx', '.doc', '.txt', '.md', '.xlsx', '.csv', '.odt', '.rtf', '.pptx', '.json']);

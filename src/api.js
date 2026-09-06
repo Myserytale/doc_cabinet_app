@@ -1,4 +1,4 @@
-let currentServerUrl = 'http://100.113.158.58:8080';
+let currentServerUrl = '';
 let currentToken = '';
 let authExpiredListener = null;
 

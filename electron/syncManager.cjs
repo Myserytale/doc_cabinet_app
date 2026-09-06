@@ -24,7 +24,7 @@ class SyncManager {
 
   getDefaultConfig() {
     return {
-      serverUrl: 'http://100.113.158.58:8080',
+      serverUrl: '',
       token: '',
       username: '',
       watchedFolders: [],

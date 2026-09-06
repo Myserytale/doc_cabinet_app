@@ -4,7 +4,7 @@ import { api } from '../api';
 
 export default function LoginModal({
   isOpen,
-  defaultServerUrl = 'http://100.113.158.58:8080',
+  defaultServerUrl = '',
   defaultUsername = '',
   onSuccess
 }) {
